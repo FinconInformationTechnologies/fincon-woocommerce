@@ -420,7 +420,7 @@ class Fincon_Woocommerce_Admin {
 			update_option('fincon_woocommerce_active', 'no');
 
 			if(get_option('fincon_woocommerce_enable_connection_email') == 'yes'):
-				$this->do_email_notification('connection', $_LIVE['ErrorString']);
+				self::do_email_notification('connection', $_LIVE['ErrorString']);
 			endif;
 
 		endif;
@@ -892,12 +892,15 @@ class Fincon_Woocommerce_Admin {
 	 *
 	 * @since    1.0.0
 	 */
-	public static function sync_stock_items(){
+	public static function sync_stock_items($ISCRON = false){
+
+		$DOWORK = $ISCRON;
 			
-
 		if(!get_option('fincon_woocommerce_product_sync_running') || get_option('fincon_woocommerce_product_sync_running') == 'no'):
+			$DOWORK = true;
+		endif;
 
-			WC_Fincon_Logger::log('Product Sync Started');
+		if($DOWORK):
 
 			set_time_limit(0);
 			@ini_set('max_execution_time',0);
@@ -915,19 +918,28 @@ class Fincon_Woocommerce_Admin {
 
 			endif;
 
+			if(!get_option('fincon_woocommerce_product_sync_eof')):
+				WC_Fincon_Logger::log('Product Sync Started');
+			endif;
+
 			$_FINCON = new WC_Fincon();
 
 			$_FINCON->LogIn();
 
 			$_COUNT = 0;
 
-			if($_LAST_UPDATE):
+			if($_LAST_UPDATE && !get_option('fincon_woocommerce_product_sync_eof')):
 
 				$_DATE_TO_WORK_WITH = self::dateTimeToDouble($_LAST_UPDATE);
 
 				$_COUNT = self::fincon_product_sync_partial($_FINCON, $_DATE_TO_WORK_WITH, $_DO_IMAGES);
 
 			else:
+
+				if(!get_option('fincon_woocommerce_do_inital_product_sync')):
+					update_option('fincon_woocommerce_do_inital_product_sync', 'yes');
+					update_option('fincon_woocommerce_do_inital_product_sync_date', wp_date('Y/m/d H:i:s'));
+				endif;
 
 				$_COUNT = self::fincon_product_sync_full($_FINCON, $_DO_IMAGES);
 
@@ -937,13 +949,25 @@ class Fincon_Woocommerce_Admin {
 			$_FINCON->LogOut();
 
 			update_option('fincon_woocommerce_product_sync_running', 'no');
-			
-			update_option('fincon_woocommerce_last_product_update', wp_date('Y/m/d H:i:s'));
 
-			WC_Fincon_Logger::log('Product Sync Ended');
+			if(!get_option('fincon_woocommerce_product_sync_eof')):
 			
-			if(get_option('fincon_woocommerce_enable_product_email') == 'yes' && $_COUNT > 0):
-				$this->do_email_notification('products', $_FINCON->_ERRORS);
+				update_option('fincon_woocommerce_last_product_update', wp_date('Y/m/d H:i:s'));
+
+				WC_Fincon_Logger::log('Product Sync Ended');
+				
+				if(get_option('fincon_woocommerce_enable_product_email') == 'yes' && $_COUNT > 0):
+					self::do_email_notification('products', $_FINCON->_ERRORS);
+				endif;
+
+			else:
+
+				if($ISCRON):
+					self::sync_stock_items($ISCRON);
+				else:
+					wp_schedule_single_event(time(), 'fincon_woocommerce_sync_products');
+				endif;
+
 			endif;
 
 		endif;
@@ -957,12 +981,17 @@ class Fincon_Woocommerce_Admin {
 	 *
 	 * @since    1.0.0
 	 */
-	public static function sync_user_items(){		
-		
-		if(!get_option('fincon_woocommerce_user_sync_running') || get_option('fincon_woocommerce_user_sync_running') == 'no'):
+	public static function sync_user_items($ISCRON = false){	
 
-			WC_Fincon_Logger::log('User Sync Started');
-			
+		$DOWORK = $ISCRON;
+
+		if(!get_option('fincon_woocommerce_user_sync_running') || get_option('fincon_woocommerce_user_sync_running') == 'no'):
+			$DOWORK = true;
+		endif;
+
+		
+		if($DOWORK):
+
 			set_time_limit(0);
 			@ini_set('max_execution_time',0);
 
@@ -970,13 +999,17 @@ class Fincon_Woocommerce_Admin {
 
 			$_LAST_UPDATE = get_option('fincon_woocommerce_last_user_update');
 
+			if(!get_option('fincon_woocommerce_user_sync_eof')):
+				WC_Fincon_Logger::log('User Sync Started');
+			endif;
+
 			$_FINCON = new WC_Fincon();
 
 			$_FINCON->LogIn();
 
 			$_COUNT = 0;
 
-			if($_LAST_UPDATE):
+			if($_LAST_UPDATE && !get_option('fincon_woocommerce_user_sync_eof')):
 
 				$_DATE_TO_WORK_WITH = self::dateTimeToDouble($_LAST_UPDATE);
 
@@ -984,19 +1017,37 @@ class Fincon_Woocommerce_Admin {
 
 			else:
 
+				if(!get_option('fincon_woocommerce_do_inital_user_sync')):
+					update_option('fincon_woocommerce_do_inital_user_sync', 'yes');
+					update_option('fincon_woocommerce_do_inital_user_sync_date', wp_date('Y/m/d H:i:s'));
+				endif;
+
 				$_COUNT = self::fincon_user_sync_full($_FINCON);
 
 			endif;
 
 			$_FINCON->LogOut();
-			update_option('fincon_woocommerce_last_user_update', wp_date('Y/m/d H:i:s'));
 
 			update_option('fincon_woocommerce_user_sync_running', 'no');
 
-			WC_Fincon_Logger::log('User Sync Ended');
+			if(!get_option('fincon_woocommerce_user_sync_eof')):
 			
-			if(get_option('fincon_woocommerce_enable_user_email') == 'yes' && $_COUNT > 0):
-				$this->do_email_notification('users', $_FINCON->_ERRORS);
+				update_option('fincon_woocommerce_last_user_update', wp_date('Y/m/d H:i:s'));
+
+				WC_Fincon_Logger::log('User Sync Ended');
+			
+				if(get_option('fincon_woocommerce_enable_user_email') == 'yes' && $_COUNT > 0):
+					self::do_email_notification('users', $_FINCON->_ERRORS);
+				endif;
+
+			else:
+
+				if($ISCRON):
+					self::sync_user_items($ISCRON);
+				else:
+					wp_schedule_single_event(time(), 'fincon_woocommerce_sync_accounts');
+				endif;
+
 			endif;
 
 		endif;
@@ -1014,18 +1065,36 @@ class Fincon_Woocommerce_Admin {
 
 		$_COUNT = 0;
 
+		$_COUNTER = 0; $_BATCH = 500;
+
+		$RESUME = false;
+
 		$_EOF = false;
 
-		$_FIRST = $_FINCON->GetStockFirst($_EOF);
-		$_EOF = $_FIRST['Eof'];
+		//WC_Fincon_Logger::log('Product Sync Batch Start');
 
-		if(!$_EOF):
+		if(get_option('fincon_woocommerce_product_sync_eof')):
+			$RESUME = true;
+
+			$_CONTINUE = get_option('fincon_woocommerce_product_sync_eof');
+
+			$_FIRST = $_FINCON->GetStockItem($_CONTINUE, true);
+			$_EOF = $_FIRST['Eof'];
+
+		else:			
+
+			$_FIRST = $_FINCON->GetStockFirst($_EOF);
+			$_EOF = $_FIRST['Eof'];
+
+		endif;
+
+		if(!$_EOF && !$RESUME):
 
 			$_COUNT += self::insert_update_product($_FIRST, $_FINCON,$_DO_IMAGES);
 
 		endif;
 
-		while(!$_EOF):
+		while(!$_EOF && ($_COUNTER < $_BATCH)):
 
 			$_STOCK = $_FINCON->GetStockNext($_EOF);
 
@@ -1033,8 +1102,20 @@ class Fincon_Woocommerce_Admin {
 
 			$_EOF = $_STOCK['Eof'];
 
+			update_option('fincon_woocommerce_product_sync_eof', $_STOCK['StockBuf']->ItemNo);
+
+			$_COUNTER++;
 
 		endwhile;
+
+		if(!$_EOF && $_COUNTER == $_BATCH):
+			update_option('fincon_woocommerce_product_sync_eof', $_STOCK['StockBuf']->ItemNo);
+			//WC_Fincon_Logger::log('Product Sync Batch End');
+		endif;
+
+		if($_EOF):
+			delete_option('fincon_woocommerce_product_sync_eof');
+		endif;
 
 		return $_COUNT;
 
@@ -1134,9 +1215,7 @@ class Fincon_Woocommerce_Admin {
 				$_PROD = new WC_Product();
 				$_PROD->set_sku($_SKU);
 
-				$_NEW = true;
-
-				
+				$_NEW = true;				
 
 			endif;
 
@@ -1304,27 +1383,60 @@ class Fincon_Woocommerce_Admin {
 	 */
 	public static function fincon_user_sync_full(&$_FINCON){
 
+
 		$_COUNT = 0;
 
-		$_FIRST = $_FINCON->GetDebAccountFirst();
+		$_COUNTER = 0; $_BATCH = 500;
 
-		$_EOF = $_FIRST['Eof'];		
+		$RESUME = false;
 
-		if(!$_EOF):
+		$_EOF = false;
 
-			$_COUNT += self::insert_update_user($_FIRST, $_FINCON);
+		//WC_Fincon_Logger::log('User Sync Batch Start');
+
+		if(get_option('fincon_woocommerce_user_sync_eof')):
+			$RESUME = true;
+
+			$_CONTINUE = get_option('fincon_woocommerce_user_sync_eof');
+
+			$_FIRST = $_FINCON->GetDebAccount($_CONTINUE, true);
+			$_EOF = $_FIRST['Eof'];
+
+		else:			
+
+			$_FIRST = $_FINCON->GetDebAccountFirst();
+			$_EOF = $_FIRST['Eof'];		
+
+		endif;		
+
+		if(!$_EOF && !$RESUME):
+
+			$_COUNT += self::insert_update_user($_FIRST, $_FINCON, true);
 
 		endif;
 
-		while(!$_EOF):
+		while(!$_EOF && ($_COUNTER < $_BATCH)):
 
 			$_USER = $_FINCON->GetDebAccountNext($_EOF);
 
-			$_COUNT += self::insert_update_user($_USER, $_FINCON);
+			$_COUNT += self::insert_update_user($_USER, $_FINCON, true);
 
 			$_EOF = $_USER['Eof'];
 
+			update_option('fincon_woocommerce_user_sync_eof', $_USER['AccountBuf']->AccNo);
+
+			$_COUNTER++;
+
 		endwhile;
+
+		if(!$_EOF && $_COUNTER == $_BATCH):
+			update_option('fincon_woocommerce_user_sync_eof', $_USER['AccountBuf']->AccNo);
+			//WC_Fincon_Logger::log('User Sync Batch End');
+		endif;
+
+		if($_EOF):
+			delete_option('fincon_woocommerce_user_sync_eof');
+		endif;
 
 		return $_COUNT;
 
@@ -1352,7 +1464,7 @@ class Fincon_Woocommerce_Admin {
 
 				$_FDATA = $_FINCON->GetDebAccount($_ACC_NO);
 
-				$_COUNT += self::insert_update_user($_FDATA, $_FINCON);
+				$_COUNT += self::insert_update_user($_FDATA, $_FINCON, false);
 
 			endforeach;
 
@@ -1372,9 +1484,13 @@ class Fincon_Woocommerce_Admin {
 	 *
 	 * @since    1.0.0
 	 */
-	public static function insert_update_user($_USER, &$_FINCON){
+	public static function insert_update_user($_USER, &$_FINCON, $LOOP){
 
-		$_ACC = $_USER['AccountBuf'];
+		if($LOOP):
+			$_ACC = $_USER['AccountBuf'];
+		else:
+			$_ACC = $_USER;
+		endif;
 
 		if ($_ACC->WebList == 'Y' && $_ACC->Active == 'Y'):
 
@@ -1392,7 +1508,7 @@ class Fincon_Woocommerce_Admin {
 
 				if($_ID == 0):
 
-					$_ID = wp_create_user($_ACC->AccNo, $_ACC->EMail, $_ACC->Password);
+					$_ID = wp_create_user($_ACC->AccNo, $_ACC->Password, $_ACC->EMail);
 
 					if(is_wp_error($_ID)):
 

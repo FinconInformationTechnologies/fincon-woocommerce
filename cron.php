@@ -11,26 +11,42 @@ if(isset($_GET['type']) && $_GET['type'] != ''):
 	switch($_GET['type']):
 
 		case "connection":
+			echo 'Doing Connection Sync<br/>';
 			Fincon_Woocommerce_Admin::check_api();
+			echo 'Finished Connection Sync<br/>';
 		break;
 
 		case "stock":
-			Fincon_Woocommerce_Admin::sync_stock_items();
+			echo 'Doing Stock Sync<br/>';
+			Fincon_Woocommerce_Admin::sync_stock_items(true);
+			echo 'Finished Stock Sync<br/>';
 		break;
 
 		case "users":
-			Fincon_Woocommerce_Admin::sync_user_items();
+			echo 'Doing User Sync<br/>';
+			Fincon_Woocommerce_Admin::sync_user_items(true);
+			echo 'Finished User Sync<br/>';
 		break;
 
 		case "logs":
+			echo 'Doing Log Clean<br/>';
 			Fincon_Woocommerce_Admin::clean_logs();
+			echo 'Finished Log Clean<br/>';
 		break;
 
 		case "all":
+			echo 'Doing Connection Sync<br/>';
 			Fincon_Woocommerce_Admin::check_api();
-			Fincon_Woocommerce_Admin::sync_stock_items();
-			Fincon_Woocommerce_Admin::sync_user_items();
+			echo 'Finished Connection Sync<br/>';
+			echo '<br/>Doing Stock Sync<br/>';
+			Fincon_Woocommerce_Admin::sync_stock_items(true);
+			echo 'Finished Stock Sync<br/>';
+			echo '<br/>Doing User Sync<br/>';
+			Fincon_Woocommerce_Admin::sync_user_items(true);
+			echo 'Finished User Sync<br/>';
+			echo '<br/>Doing Log Clean<br/>';
 			Fincon_Woocommerce_Admin::clean_logs();
+			echo 'Finished Log Clean<br/>';
 		break;
 
 		default:
