@@ -4,6 +4,10 @@
 
 class WC_Fincon{
 
+	var $_LOGGED_IN = false;
+	var $_SESSION_ERROR = 'Maximum number of sessions exceeded.';
+	var $_RELOG_ERROR = 'Invalid ConnectID.';
+
 	var $_ID = 0;
 	var $_URL = '';
 	var $_UN  = '';
@@ -26,6 +30,8 @@ class WC_Fincon{
 	var $_GUEST = '';
 	var $_DECIMAL = 0;
 	var $_RETRY = 1;
+	var $_RELOG = 1;
+
 
 
 
@@ -224,6 +230,65 @@ class WC_Fincon{
 
 	
 	/*
+	HELPER - RELOGIN
+	 */
+	public function ReLogIn(){
+
+		if($this->_RELOG <= 5):
+
+			WC_Fincon_Logger::log('RELOGIN -- **ATTEMPTING RELOGIN** -- '.$this->_RELOG);
+
+			$this->KillUsers();
+			$this->LogOut();
+			$this->Login();
+
+			$this->_RELOG++;
+
+		else:
+
+			WC_Fincon_Logger::log('RELOGIN -- **ATTEMPT LIMIT REACHED** -- SHUTTING DOWN');
+			exit();
+
+		endif;
+	}
+
+
+
+
+
+
+
+
+
+	
+	/*
+	HELPER - TestLogin
+	 */
+	public function TestLogin(){
+
+		$_F = false;
+
+		$_DEP = new TDebAccountRecord();
+
+		$_RETURN = $this->_SOAP->GetDebAccount($this->_ID, $this->_ACC, $_DEP, $_F, $this->_ERR);
+
+		if($_RETURN['ErrorString'] == $this->_RELOG_ERROR):		
+			WC_Fincon_Logger::log('**INVALID CONNECT ID**');	
+			$this->ReLogIn();
+		endif;
+
+	}
+
+
+
+
+
+
+
+
+
+	
+	/*
 	HELPER - LOGIN
 	 */
 	public function LogIn(){
@@ -234,13 +299,18 @@ class WC_Fincon{
 
 			$this->_ID = $_HAS_A_LOGIN;
 
+			/* TEST LOGIN */
+			$this->TestLogin();
+
 		else:
 
 			$_LOGIN = $this->_SOAP->LogIn($this->_D, $this->_UN, $this->_PW, $this->_ID, $this->_ERR, $this->_EXT);
 
 			if($_LOGIN['return']):
 				$this->_ID = $_LOGIN['ConnectID'];	
+				$this->_LOGGED_IN = true;
 				update_option('fincon_woocommerce_logged_in_session', $_LOGIN['ConnectID']);
+				WC_Fincon_Logger::log('**LOGGED IN**');
 			else:
 
 				if($_LOGIN['ErrorString'] != ""):
@@ -250,7 +320,7 @@ class WC_Fincon{
 					update_option('fincon_woocommerce_admin_message_error', $_LOGIN['ErrorString']);
 
 					/* 1.3.0: Login Retry */
-					if($_LOGIN['ErrorString'] == 'Maximum number of sessions exceeded.' && $this->_RETRY <= 5):
+					if($_LOGIN['ErrorString'] == $this->_SESSION_ERROR && $this->_RETRY <= 5):
 
 						$this->KillUsers();
 
@@ -259,6 +329,11 @@ class WC_Fincon{
 						$this->_RETRY++;
 
 						$this->LogIn();
+
+					elseif($this->_RETRY > 5 ):
+
+						WC_Fincon_Logger::log('Connection Login Retry -- **ATTEMPT LIMIT REACHED** -- SHUTTING DOWN');
+						exit();
 
 					endif;
 
@@ -290,7 +365,21 @@ class WC_Fincon{
 
 		$_LOGOUT = $this->_SOAP->LogOut($this->_ID, $this->_ERR);
 
-		delete_option('fincon_woocommerce_logged_in_session');
+		if($_LOGOUT['ErrorString'] != ''):
+
+			WC_Fincon_Logger::log('Could not log out: '.$_LOGOUT['ErrorString']);
+
+		else:
+
+			delete_option('fincon_woocommerce_logged_in_session');
+		
+			$this->_LOGGED_IN = false;
+
+			WC_Fincon_Logger::log('**LOGGED OUT**');
+
+		endif;
+
+
 		
 	}
 
@@ -313,6 +402,10 @@ class WC_Fincon{
 		endif;
 
 		$_KILL = $this->_SOAP->KillUsers($this->_ID);
+
+		delete_option('fincon_woocommerce_logged_in_session');
+
+		$this->_LOGGED_IN = false;
 		
 	}
 
@@ -329,6 +422,9 @@ class WC_Fincon{
 	HELPER - GET ACCOUNT
 	 */
 	public function GetDebAccount($_DACC = null, $FULL = false){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_F = false;
 
@@ -384,6 +480,9 @@ class WC_Fincon{
 	 */
 	public function GetDebAccountFirst(){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
+
 		$_EOF = false;
 
 		$_POSITION = '';
@@ -427,6 +526,9 @@ class WC_Fincon{
 	 */
 	public function GetDebAccountNext($_EOF){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
+
 
 		$_POSITION = '';
 
@@ -461,6 +563,8 @@ class WC_Fincon{
 	 */
 	public function GetAccountsChanged($_FROM_DATE_TIME){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_POSITION = '';
 
@@ -495,6 +599,9 @@ class WC_Fincon{
 	HELPER - UPDATE ACCOUNT
 	 */
 	public function UpdateDebAccount($_DACC){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_C = false;
 
@@ -542,6 +649,9 @@ class WC_Fincon{
 	HELPER - GET STOCK ITEM
 	 */
 	public function GetStockItem($_SKU, $_FULL = false){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_F = false;
 
@@ -592,6 +702,9 @@ class WC_Fincon{
 	 */
 	public function GetStockFirst($_EOF){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
+
 		$_POSITION = '';
 
 		$_STOCK = new TStockRecord();
@@ -626,6 +739,9 @@ class WC_Fincon{
 	HELPER - GET STOCK ITEM
 	 */
 	public function GetStockNext($_EOF){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_POSITION = '';
 
@@ -662,6 +778,8 @@ class WC_Fincon{
 	 */
 	public function GetStockChanged($_FROM_DATE_TIME){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
 		
 		$_POSITION = '';
 
@@ -698,6 +816,9 @@ class WC_Fincon{
 	HELPER - GET STOCK QUANTITY
 	 */
 	public function GetStockItemQTY($_SKU){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_F = false;
 
@@ -766,6 +887,9 @@ class WC_Fincon{
 	 */
 	public function GetStockImage($SKU){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
+
 		$_IMAGE = '';
 		$_FOUND = false;
 
@@ -800,6 +924,9 @@ class WC_Fincon{
 	HELPER - GET SHIPPING
 	 */
 	public function GetShipping($_ORDER){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_F = false;
 
@@ -858,6 +985,9 @@ class WC_Fincon{
 	HELPER - GET COUPON
 	 */
 	public function GetCoupon($_COUPON){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		$_F = false;
 
@@ -922,6 +1052,9 @@ class WC_Fincon{
 	 */
 	public function CreateSalesOrder($_SO, $_SALES_ORDER_DETAILS, $_OID){
 
+		/* TEST LOGIN */
+		$this->TestLogin();
+
 		$_SO_NUMBER = '';
 		$_SO_DONE = false;
 
@@ -964,6 +1097,9 @@ class WC_Fincon{
 	GENERATE SALES ORDER BASED ON PAYMENT
 	 */
 	public function SendSOToFincon($_ORDER_ID){
+
+		/* TEST LOGIN */
+		$this->TestLogin();
 
 		if(count($this->_ERRORS) > 0):
 			update_post_meta($_ORDER_ID, '_fincon_sales_error', $this->_ERRORS);
